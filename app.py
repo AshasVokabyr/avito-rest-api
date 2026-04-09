@@ -6,6 +6,8 @@ import logging
 import uvicorn
 import os
 import pandas as pd
+import dotenv
+from deepseek_generator import YandexGPTLiteGenerator
 
 logging.basicConfig(
     level=logging.INFO,
@@ -13,11 +15,14 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+dotenv.load_dotenv()
+
 # Пути к артефактам (относительно текущего файла)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 MODEL_PATH = os.path.join(BASE_DIR, "model.cbm")
 VECTORIZER_PATH = os.path.join(BASE_DIR, "tfidf_vectorizer.joblib")
 
+generator = YandexGPTLiteGenerator()
 model = None
 pipeline = None
 
@@ -32,6 +37,11 @@ class PredictionResponse(BaseModel):
     should_split: bool
     probability: float
     features_count: int
+
+class DraftResponse(BaseModel):
+    should_split: bool
+    probability: float
+    draft: str
 
 
 @asynccontextmanager
@@ -140,6 +150,44 @@ async def redirect_docs():
     return RedirectResponse(url="/redoc")
 
 
+@app.post("/generate-draft", response_model=DraftResponse, tags=["Generation"])
+async def generate_draft(request: PredictionRequest):
+
+    if model is None or pipeline is None:
+        raise HTTPException(status_code=503, detail="Сервис не готов")
+
+    try:
+
+        # признаки
+        features_df = pipeline.transform([request.description])
+        features_df['description_text'] = request.description
+
+        prediction = model.predict(features_df)
+        probabilities = model.predict_proba(features_df)
+
+        should_split = bool(prediction[0])
+        probability = float(probabilities[0][1])
+
+        # генерация через DeepSeek
+        draft = generator.generate(
+            request.description,
+            should_split,
+            probability
+        )
+
+        return DraftResponse(
+            should_split=should_split,
+            probability=probability,
+            draft=draft
+        )
+
+    except Exception as exc:
+        logger.error("Ошибка генерации: %s", exc)
+        raise HTTPException(
+            status_code=500,
+            detail="Ошибка генерации черновика"
+        )
+
 if __name__ == "__main__":
     logger.info("🔧 Запуск сервера на порту 8000...")
     uvicorn.run(
@@ -149,3 +197,5 @@ if __name__ == "__main__":
         reload=os.getenv("ENV") == "development",
         log_level="info"
     )
+
+
