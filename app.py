@@ -7,7 +7,7 @@ import uvicorn
 import os
 import pandas as pd
 import dotenv
-from services.deepseek_generator import YandexGPTLiteGenerator
+from services.yandex_generator import YandexGPTLiteGenerator
 
 logging.basicConfig(
     level=logging.INFO,
