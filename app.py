@@ -7,7 +7,7 @@ import uvicorn
 import os
 import pandas as pd
 import dotenv
-from deepseek_generator import YandexGPTLiteGenerator
+from services.deepseek_generator import YandexGPTLiteGenerator
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,8 +19,8 @@ dotenv.load_dotenv()
 
 # Пути к артефактам (относительно текущего файла)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-MODEL_PATH = os.path.join(BASE_DIR, "model.cbm")
-VECTORIZER_PATH = os.path.join(BASE_DIR, "tfidf_vectorizer.joblib")
+MODEL_PATH = os.path.join(BASE_DIR, "models/model.cbm")
+VECTORIZER_PATH = os.path.join(BASE_DIR, "models/tfidf_vectorizer.joblib")
 
 generator = YandexGPTLiteGenerator()
 model = None
@@ -49,11 +49,11 @@ async def lifespan(app: FastAPI):
     """Lifespan-контекст для загрузки/выгрузки ресурсов"""
     global model, pipeline
 
-    logger.info("🚀 Загрузка артефактов модели...")
+    logger.info("Загрузка артефактов модели...")
 
     try:
         # Проверка наличия файлов
-        for path, name in [(MODEL_PATH, "model.cbm"), (VECTORIZER_PATH, "tfidf_vectorizer.joblib")]:
+        for path, name in [(MODEL_PATH, "models/model.cbm"), (VECTORIZER_PATH, "models/tfidf_vectorizer.joblib")]:
             if not os.path.exists(path):
                 raise FileNotFoundError(f"Не найден файл: {name} по пути {path}")
 
@@ -63,21 +63,21 @@ async def lifespan(app: FastAPI):
         logger.info("✅ Модель CatBoost загружена: %s", MODEL_PATH)
 
         # Загрузка пайплайна признаков с векторизатором
-        from feature_pipeline import FeaturePipeline
+        from services.feature_pipeline import FeaturePipeline
         pipeline = FeaturePipeline(tfidf_vectorizer_path=VECTORIZER_PATH)
-        logger.info("✅ Пайплайн признаков загружен: %s", VECTORIZER_PATH)
+        logger.info("Пайплайн признаков загружен: %s", VECTORIZER_PATH)
 
-        logger.info("✨ Сервис готов к работе")
+        logger.info("Сервис готов к работе")
         yield
 
     except FileNotFoundError as exc:
-        logger.error("❌ Критическая ошибка: файл артефакта не найден - %s", exc)
+        logger.error("Критическая ошибка: файл артефакта не найден - %s", exc)
         raise RuntimeError("Не удалось загрузить артефакты модели") from exc
     except Exception as exc:
-        logger.error("❌ Ошибка инициализации сервиса: %s", exc)
+        logger.error("Ошибка инициализации сервиса: %s", exc)
         raise RuntimeError("Не удалось инициализировать сервис") from exc
     finally:
-        logger.info("🔄 Завершение работы сервиса")
+        logger.info("Завершение работы сервиса")
 
 
 app = FastAPI(
